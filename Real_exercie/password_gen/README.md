@@ -130,19 +130,116 @@ Explicación detallada:
    - `rand.Int` genera un número aleatorio entre 0 y el límite superior (exclusivo)
 2. El número generado se usa como índice para seleccionar un tipo de carácter de la lista de combinaciones
 
-### Generación de Contraseñas
+### Funciones de Generación de Contraseñas
 
-El proceso de generación de contraseñas sigue estos pasos:
+#### buildMapCombination
 
-1. El usuario especifica:
-   - Longitud de la contraseña
-   - Tipos de caracteres a incluir
-   - Número de contraseñas a generar
+Esta función crea una lista de tipos de caracteres basada en las preferencias del usuario:
 
-2. Para cada contraseña:
-   - Se selecciona aleatoriamente un tipo de carácter
-   - Se genera un carácter aleatorio del tipo seleccionado
-   - Se repite el proceso hasta alcanzar la longitud deseada
+```go
+func buildMapCombination(includeUpCase, includeNumber, includeSymbols bool) []CharType {
+    var comb []CharType
+    comb = append(comb, Lowercase)  // Siempre incluye minúsculas
+    if includeUpCase {
+        comb = append(comb, Uppercase)
+    }
+    if includeNumber {
+        comb = append(comb, Number)
+    }
+    if includeSymbols {
+        comb = append(comb, Symbol)
+    }
+    return comb
+}
+```
+
+Explicación detallada:
+1. La función toma tres parámetros booleanos que representan las preferencias del usuario
+2. Crea un slice vacío de tipo `CharType`
+3. Siempre incluye `Lowercase` como tipo base
+4. Agrega condicionalmente los otros tipos según las preferencias del usuario
+5. Retorna el slice con los tipos seleccionados
+
+#### BuildMap
+
+Esta función crea un mapa que relaciona cada tipo de carácter con su función generadora correspondiente:
+
+```go
+func BuildMap() map[CharType]func() (string, error) {
+    maps := make(map[CharType]func() (string, error))
+    maps[Lowercase] = GetLowerCaseLetter
+    maps[Uppercase] = GetUpperCaseLetter
+    maps[Number] = GetNumberLetter
+    maps[Symbol] = GetSymbol
+    return maps
+}
+```
+
+Explicación detallada:
+1. Crea un mapa donde:
+   - Las claves son de tipo `CharType`
+   - Los valores son funciones que retornan un string y un error
+2. Asocia cada tipo de carácter con su función generadora específica:
+   - `Lowercase` → `GetLowerCaseLetter`
+   - `Uppercase` → `GetUpperCaseLetter`
+   - `Number` → `GetNumberLetter`
+   - `Symbol` → `GetSymbol`
+3. Este mapa permite una fácil selección de la función generadora correcta
+
+#### ExecuteCombination
+
+Esta función es el núcleo del generador de contraseñas, que crea una contraseña de la longitud especificada:
+
+```go
+func ExecuteCombination(limite int, operations []CharType) (string, error) {
+    functionMap := BuildMap()
+    pdw := ""
+    for x := 1; x <= limite; x++ {
+        ctype, err := RandomCombo(operations)
+        if err != nil {
+            return "", fmt.Errorf("error selecting character type: %w", err)
+        }
+        char, err := functionMap[ctype]()
+        if err != nil {
+            return "", fmt.Errorf("error generating character: %w", err)
+        }
+        pdw += char
+    }
+    return pdw, nil
+}
+```
+
+Explicación detallada del proceso:
+1. **Inicialización**:
+   - Obtiene el mapa de funciones usando `BuildMap()`
+   - Inicializa una cadena vacía para la contraseña
+
+2. **Bucle de Generación**:
+   - Itera `limite` veces (una por cada carácter de la contraseña)
+   - En cada iteración:
+     1. Selecciona aleatoriamente un tipo de carácter usando `RandomCombo`
+     2. Obtiene la función generadora correspondiente del mapa
+     3. Genera un carácter aleatorio usando la función seleccionada
+     4. Agrega el carácter a la contraseña
+
+3. **Manejo de Errores**:
+   - Verifica errores en la selección del tipo de carácter
+   - Verifica errores en la generación del carácter
+   - Retorna errores descriptivos si algo falla
+
+4. **Resultado**:
+   - Retorna la contraseña generada y nil si todo fue exitoso
+   - Retorna una cadena vacía y un error si algo falló
+
+### Flujo de Generación de Contraseñas
+
+1. El usuario especifica sus preferencias
+2. `buildMapCombination` crea la lista de tipos de caracteres permitidos
+3. `BuildMap` crea el mapa de funciones generadoras
+4. `ExecuteCombination` genera la contraseña:
+   - Selecciona aleatoriamente tipos de caracteres
+   - Genera caracteres aleatorios de cada tipo
+   - Combina los caracteres en una contraseña final
 
 ## Uso del Programa
 
