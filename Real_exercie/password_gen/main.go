@@ -1,65 +1,13 @@
 package main
 
 import (
+	"crypto/rand"
 	"fmt"
-	"math/rand"
+	"math/big"
 	"strconv"
-	"time"
 )
 
-func CaptureBinaryOption(label string) (bool, error) {
-	option := ""
-	fmt.Print(label)
-	_, err := fmt.Scanln(&option)
-	if err != nil {
-		fmt.Errorf("Error de captura %s", err.Error())
-		return false, err
-	}
-	switch option {
-	case "yes", "y":
-		return true, nil
-	case "no", "n":
-		return false, nil
-	default:
-		panic("Error de entrada")
-	}
-}
-
-func CaptureNumericOption(label string) (int, error) {
-	option := ""
-	fmt.Print(label)
-	_, err := fmt.Scanln(&option)
-	if err != nil {
-		fmt.Errorf("Error de captura %s", err.Error())
-		return 0, err
-	}
-	return strconv.Atoi(option)
-}
-
-func BuildSimbol(sliceSymbols []string) string {
-	rand.Seed(time.Now().UnixNano())
-	randindex := rand.Intn(len(sliceSymbols))
-	return sliceSymbols[randindex]
-}
-
-func generateAlphabetUp() []string {
-	var alphabet []string
-	for i := 0; i < 26; i++ {
-		alphabet = append(alphabet, string(rune('A'+i)))
-	}
-
-	return alphabet
-}
-
-func generateAlphabet() []string {
-	var alphabet []string
-	for i := 0; i < 26; i++ {
-		alphabet = append(alphabet, string(rune('a'+i)))
-	}
-
-	return alphabet
-}
-
+// CharType represents the type of character in a password
 type CharType uint
 
 const (
@@ -69,32 +17,97 @@ const (
 	Symbol                         // 1000
 )
 
-func GetLowerCaseLetter() string {
-	sliceAlphabeticDn := generateAlphabet()
-	letter := BuildSimbol(sliceAlphabeticDn)
-	return letter
+// Constants for password generation
+const (
+	MinPasswordLength = 8
+	MaxPasswordLength = 128
+)
+
+var (
+	lowercaseLetters = generateAlphabet(false)
+	uppercaseLetters = generateAlphabet(true)
+	numbers          = []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}
+	symbols          = []string{"!", "@", "#", "%", "^", "&", "*", "(", ":", ")", "_", "=", "+", "-", "[", "]", "{", "}", "|", "\\", "/", "?", "<", ">", "~", "`"}
+)
+
+// CaptureBinaryOption captures a yes/no input from the user
+func CaptureBinaryOption(label string) (bool, error) {
+	option := ""
+	fmt.Print(label)
+	_, err := fmt.Scanln(&option)
+	if err != nil {
+		return false, fmt.Errorf("error capturing input: %w", err)
+	}
+	switch option {
+	case "yes", "y":
+		return true, nil
+	case "no", "n":
+		return false, nil
+	default:
+		return false, fmt.Errorf("invalid input: %s", option)
+	}
 }
 
-func GetUpperCaseLetter() string {
-	sliceAlphabeticDn := generateAlphabetUp()
-	letter := BuildSimbol(sliceAlphabeticDn)
-	return letter
+// CaptureNumericOption captures a numeric input from the user
+func CaptureNumericOption(label string) (int, error) {
+	option := ""
+	fmt.Print(label)
+	_, err := fmt.Scanln(&option)
+	if err != nil {
+		return 0, fmt.Errorf("error capturing input: %w", err)
+	}
+	num, err := strconv.Atoi(option)
+	if err != nil {
+		return 0, fmt.Errorf("invalid number: %w", err)
+	}
+	return num, nil
 }
 
-func GetNumberLetter() string {
-	sliceNumber := []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}
-	letter := BuildSimbol(sliceNumber)
-	return letter
+// BuildSymbol returns a random symbol from the given slice
+func BuildSymbol(sliceSymbols []string) (string, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(len(sliceSymbols))))
+	if err != nil {
+		return "", fmt.Errorf("error generating random number: %w", err)
+	}
+	return sliceSymbols[n.Int64()], nil
 }
 
-func GetSymbol() string {
-	sliceSymbols := []string{"!", "@", "#", "%", "^", "&", "*", "(", ":", ")", "_", "="}
-	letter := BuildSimbol(sliceSymbols)
-	return letter
+// generateAlphabet generates a slice of letters (uppercase or lowercase)
+func generateAlphabet(uppercase bool) []string {
+	var alphabet []string
+	start := 'a'
+	if uppercase {
+		start = 'A'
+	}
+	for i := 0; i < 26; i++ {
+		alphabet = append(alphabet, string(rune(int(start)+i)))
+	}
+	return alphabet
 }
 
-func BuildMap() map[CharType]func() string {
-	maps := make(map[CharType]func() string)
+// GetLowerCaseLetter returns a random lowercase letter
+func GetLowerCaseLetter() (string, error) {
+	return BuildSymbol(lowercaseLetters)
+}
+
+// GetUpperCaseLetter returns a random uppercase letter
+func GetUpperCaseLetter() (string, error) {
+	return BuildSymbol(uppercaseLetters)
+}
+
+// GetNumberLetter returns a random number
+func GetNumberLetter() (string, error) {
+	return BuildSymbol(numbers)
+}
+
+// GetSymbol returns a random symbol
+func GetSymbol() (string, error) {
+	return BuildSymbol(symbols)
+}
+
+// BuildMap creates a map of character types to their generator functions
+func BuildMap() map[CharType]func() (string, error) {
+	maps := make(map[CharType]func() (string, error))
 	maps[Lowercase] = GetLowerCaseLetter
 	maps[Uppercase] = GetUpperCaseLetter
 	maps[Number] = GetNumberLetter
@@ -102,55 +115,90 @@ func BuildMap() map[CharType]func() string {
 	return maps
 }
 
-func RandomCombo(combinations []CharType) CharType {
-	rand.Seed(time.Now().UnixNano())
-	return combinations[rand.Intn(len(combinations))]
+// RandomCombo returns a random character type from the given combinations
+func RandomCombo(combinations []CharType) (CharType, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(int64(len(combinations))))
+	if err != nil {
+		return 0, fmt.Errorf("error generating random number: %w", err)
+	}
+	return combinations[n.Int64()], nil
 }
 
+// ExecuteCombination generates a password of the specified length using the given character types
 func ExecuteCombination(limite int, operations []CharType) (string, error) {
 	functionMap := BuildMap()
 	pdw := ""
 	for x := 1; x <= limite; x++ {
-		ctype := RandomCombo(operations)
-		pdw += functionMap[ctype]()
+		ctype, err := RandomCombo(operations)
+		if err != nil {
+			return "", fmt.Errorf("error selecting character type: %w", err)
+		}
+		char, err := functionMap[ctype]()
+		if err != nil {
+			return "", fmt.Errorf("error generating character: %w", err)
+		}
+		pdw += char
 	}
 	return pdw, nil
 }
 
 func main() {
-	fmt.Println("Generador de contrasenas.")
-	longitud, err := CaptureNumericOption("Longitud de la contrasena   :")
+	fmt.Println("Password Generator")
+
+	longitud, err := CaptureNumericOption("Password length: ")
 	if err != nil {
-		panic("Error")
-	}
-	includeUpCase, err1 := CaptureBinaryOption("Incluir Mayusculas (Yes/no) :")
-	if err1 != nil {
-		panic("Error")
-	}
-	includeNumber, err2 := CaptureBinaryOption("Incluir numeros (yes/no)    :")
-	if err2 != nil {
-		panic("Error")
-	}
-	includeSimbols, err3 := CaptureBinaryOption("Incluir simbolos (yes/no)   :")
-	if err3 != nil {
-		panic("Error")
+		fmt.Printf("Error: %v\n", err)
+		return
 	}
 
-	generateNumber, err4 := CaptureNumericOption("Cantidad de contrasenas a generar :")
-	if err4 != nil {
-		panic("Error")
+	if longitud < MinPasswordLength || longitud > MaxPasswordLength {
+		fmt.Printf("Password length must be between %d and %d\n", MinPasswordLength, MaxPasswordLength)
+		return
 	}
 
+	includeUpCase, err := CaptureBinaryOption("Include uppercase letters? (yes/no): ")
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	includeNumber, err := CaptureBinaryOption("Include numbers? (yes/no): ")
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	includeSymbols, err := CaptureBinaryOption("Include symbols? (yes/no): ")
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	combinations := buildMapCombination(includeUpCase, includeNumber, includeSymbols)
+	if len(combinations) == 0 {
+		fmt.Println("Error: At least one character type must be selected")
+		return
+	}
+
+	generateNumber, err := CaptureNumericOption("Number of passwords to generate: ")
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+		return
+	}
+
+	fmt.Println("\nGenerated Passwords:")
 	for n := 1; n <= generateNumber; n++ {
-		pwd, errOut := ExecuteCombination(longitud, buildMapCombination(includeUpCase, includeNumber, includeSimbols))
-		if errOut != nil {
-			panic("Error saliendo")
+		pwd, err := ExecuteCombination(longitud, combinations)
+		if err != nil {
+			fmt.Printf("Error generating password: %v\n", err)
+			continue
 		}
-		println("Nueva contrasena :", pwd)
+		fmt.Printf("%d. %s\n", n, pwd)
 	}
 }
 
-func buildMapCombination(includeUpCase, includeNumber, includeSimbols bool) []CharType {
+// buildMapCombination creates a slice of character types based on user preferences
+func buildMapCombination(includeUpCase, includeNumber, includeSymbols bool) []CharType {
 	var comb []CharType
 	comb = append(comb, Lowercase)
 	if includeUpCase {
@@ -159,7 +207,7 @@ func buildMapCombination(includeUpCase, includeNumber, includeSimbols bool) []Ch
 	if includeNumber {
 		comb = append(comb, Number)
 	}
-	if includeSimbols {
+	if includeSymbols {
 		comb = append(comb, Symbol)
 	}
 	return comb
