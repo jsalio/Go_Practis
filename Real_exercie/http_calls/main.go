@@ -4,76 +4,94 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strings"
 	"time"
 )
-
-type StringBody string
-
-func (s StringBody) Truncate(length int) string {
-	return string(s[:length])
-}
 
 type ResponseCall struct {
 	Status int
 	Time   time.Duration
-	Body   StringBody
+	Body   string
 }
 
-func UserCapture() string {
-	var uri string = ""
-	fmt.Print("inserte la url a consultar :")
-	_, err := fmt.Scanln(&uri)
-
-	if err != nil {
-		fmt.Errorf("Invalid url")
-		return ""
+// Truncate corta el string a la longitud especificada, manejando casos cortos
+func (r ResponseCall) Truncate(length int) string {
+	if len(r.Body) <= length {
+		return r.Body
 	}
-	return uri
+	return r.Body[:length]
 }
 
-func ExecuteCall(uri string) ResponseCall {
-	start := time.Now()
-	response, error := http.Get(uri)
+// UserCapture captura y valida la URL del usuario
+func UserCapture() (string, error) {
+	fmt.Print("Inserte la URL a consultar (ej. https://example.com): ")
+	var uri string
+	_, err := fmt.Scanln(&uri)
+	if err != nil {
+		return "", fmt.Errorf("error al leer la URL: %v", err)
+	}
 
-	if error != nil {
-		elapsed := time.Since(start)
-		return ResponseCall{
-			Status: 500,
-			Time:   elapsed,
-			Body:   "",
-		}
+	// Asegurarse de que la URL tenga un esquema (http o https)
+	if !strings.HasPrefix(uri, "http://") && !strings.HasPrefix(uri, "https://") {
+		uri = "https://" + uri
+	}
+
+	// Validar el formato de la URL
+	_, err = url.ParseRequestURI(uri)
+	if err != nil {
+		return "", fmt.Errorf("URL inválida: %v", err)
+	}
+
+	return uri, nil
+}
+
+// ExecuteCall realiza la solicitud HTTP y devuelve la respuesta
+func ExecuteCall(uri string) (ResponseCall, error) {
+	start := time.Now()
+	response, err := http.Get(uri)
+	if err != nil {
+		return ResponseCall{}, fmt.Errorf("error en la solicitud HTTP: %v", err)
 	}
 	defer response.Body.Close()
-	elapsed := time.Since(start)
 
-	if response.StatusCode != 200 {
+	elapsed := time.Since(start)
+	body, err := io.ReadAll(response.Body)
+	if err != nil {
 		return ResponseCall{
 			Status: response.StatusCode,
 			Time:   elapsed,
 			Body:   "",
-		}
-	}
-
-	content, error := io.ReadAll(response.Body)
-
-	if error != nil {
-		return ResponseCall{
-			Status: response.StatusCode,
-			Time:   elapsed,
-			Body:   "Response can't decode",
-		}
+		}, fmt.Errorf("error al leer el cuerpo de la respuesta: %v", err)
 	}
 
 	return ResponseCall{
 		Status: response.StatusCode,
 		Time:   elapsed,
-		Body:   StringBody(content),
-	}
+		Body:   string(body),
+	}, nil
 }
 
 func main() {
-	fmt.Println("Hacer lla,ada a apis")
-	uri := UserCapture()
-	response := ExecuteCall(uri)
-	fmt.Printf("La llamada a %s respondio con %d duro %s y su contenido es \n %s", uri, response.Status, response.Time, response.Body.Truncate(25))
+	fmt.Println("Programa para hacer llamadas HTTP GET")
+
+	// Capturar y validar la URL
+	uri, err := UserCapture()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// Ejecutar la solicitud HTTP
+	response, err := ExecuteCall(uri)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	// Mostrar resultados
+	fmt.Printf("\nResultados de la solicitud a %s:\n", uri)
+	fmt.Printf("Código de estado: %d\n", response.Status)
+	fmt.Printf("Tiempo de respuesta: %s\n", response.Time)
+	fmt.Printf("Primeros 100 caracteres del cuerpo:\n%s\n", response.Truncate(100))
 }
