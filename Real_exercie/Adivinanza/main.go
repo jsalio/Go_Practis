@@ -13,16 +13,17 @@ type GameData struct {
 	UserPoint       int32
 	PistasRestantes int32
 	Penalty         int32
+	Attempts        int32 // Contador de intentos
 }
 
 type MatchData string
 
 const (
-	IsGreathenThat MatchData = "Is greater than"
-	IsLessThat     MatchData = "Is Less Thats"
-	IsMatchThat    MatchData = "It can be"
-	Match          MatchData = "Congratuliation"
-	Loose          MatchData = "You loose"
+	IsGreaterThan MatchData = "Is greater than"
+	IsLessThan    MatchData = "Is less than"
+	IsMatchThat   MatchData = "It can be"
+	Match         MatchData = "Congratulations"
+	Loose         MatchData = "You lose"
 )
 
 func GenerateRandNum() int32 {
@@ -33,16 +34,17 @@ func GenerateRandNum() int32 {
 
 func IsMatch(game *GameData) (MatchData, error) {
 	userNumber := ""
-	fmt.Print("Ingresa tu respuesta :")
+	fmt.Print("Enter your guess: ")
 	_, err := fmt.Scanln(&userNumber)
 	if err != nil {
-		return "", fmt.Errorf("Invalid input %w", err)
+		return "", fmt.Errorf("invalid input: %w", err)
 	}
 	value, err := ConvertToInt(userNumber)
 	if err != nil {
-		return "", fmt.Errorf("Invalid input %w", err)
+		return "", fmt.Errorf("invalid input: %w", err)
 	}
 
+	game.Attempts++ // Incrementar contador de intentos
 	if int(game.PcNumber) == value {
 		game.UserNumber = int32(value)
 		return Match, nil
@@ -55,28 +57,30 @@ func IsMatch(game *GameData) (MatchData, error) {
 func ConvertToInt(input string) (int, error) {
 	value, err := strconv.Atoi(input)
 	if err != nil {
-		return 0, fmt.Errorf("Invalid input %w", err)
+		return 0, fmt.Errorf("invalid number: %w", err)
 	}
 	return value, nil
 }
 
 func GeneratePista(game *GameData) (MatchData, error) {
 	userNumber := ""
-	fmt.Print("Ingresa tu posible valor :")
+	fmt.Print("Enter your possible value: ")
 	_, err := fmt.Scanln(&userNumber)
 	if err != nil {
-		return "", fmt.Errorf("Invalid input %w", err)
+		return "", fmt.Errorf("invalid input: %w", err)
 	}
 	value, err := ConvertToInt(userNumber)
 	if err != nil {
-		return "", fmt.Errorf("Invalid input %w", err)
+		return "", fmt.Errorf("invalid number: %w", err)
 	}
 
+	game.PistasRestantes--
+	game.Attempts++ // Incrementar contador de intentos
 	game.UserPoint -= game.Penalty
 	if game.PcNumber > int32(value) {
-		return IsGreathenThat, nil
+		return IsGreaterThan, nil
 	} else if game.PcNumber < int32(value) {
-		return IsLessThat, nil
+		return IsLessThan, nil
 	} else {
 		return IsMatchThat, nil
 	}
@@ -89,69 +93,90 @@ func NewGame() GameData {
 		UserPoint:       100,
 		PistasRestantes: 5,
 		Penalty:         20,
+		Attempts:        0, // Inicializar contador de intentos
 	}
 }
 
 func GameOver(game *GameData) error {
-	println("Validando el game over")
 	if game.UserPoint <= 0 {
-		return fmt.Errorf("Perdiste")
+		return fmt.Errorf("you lose: no points left")
+	}
+	if game.PistasRestantes <= 0 {
+		return fmt.Errorf("you lose: no hints left")
 	}
 	return nil
 }
 
 func Menu(game *GameData) (int, error) {
 	option := ""
-	fmt.Printf("Te quedan %d puntos \n", game.UserPoint)
-	fmt.Printf("El numero en que pienso es %d puntos \n", game.PcNumber)
-	println("[1] Ingresar respuesta.")
-	println("[2] Pedir una pista.")
-	println("[3] Salir.")
-	println("")
-	println("Ingrese una opcion")
+	fmt.Printf("You have %d points, %d hints remaining, and %d attempts made\n", game.UserPoint, game.PistasRestantes, game.Attempts)
+	fmt.Printf("The number I'm thinking of is %d\n", game.PcNumber) // Para depuración, puede eliminarse en producción
+	fmt.Println("[1] Enter guess")
+	fmt.Println("[2] Request a hint")
+	fmt.Println("[3] Exit")
+	fmt.Println("")
+	fmt.Print("Enter an option: ")
 	_, err := fmt.Scanln(&option)
 	if err != nil {
-		return 0, fmt.Errorf("Error de imput %w", err)
+		return 0, fmt.Errorf("invalid input: %w", err)
 	}
 	value, err := strconv.Atoi(option)
 	if err != nil {
-		return 0, fmt.Errorf("Error de imput %w", err)
+		return 0, fmt.Errorf("invalid number: %w", err)
+	}
+	if value < 1 || value > 3 {
+		return 0, fmt.Errorf("invalid option: must be 1, 2, or 3")
 	}
 	return value, nil
 }
 
 func main() {
-	fmt.Println("Adivina el numero que pienso.")
+	fmt.Println("Guess the number I'm thinking of!")
 	const exitOp int = 3
 	game := NewGame()
 	for {
-		if GameOver(&game) != nil {
-			println("Terminado")
+		if err := GameOver(&game); err != nil {
+			fmt.Printf("Game over: %v. You made %d attempts.\n", err, game.Attempts)
 			return
 		}
 		menuOp, err := Menu(&game)
-		if game.PcNumber == game.UserNumber || menuOp == exitOp || err != nil {
+		if err != nil {
+			fmt.Printf("Error: %v\n", err)
+			continue
+		}
+		if game.PcNumber == game.UserNumber || menuOp == exitOp {
+			if game.PcNumber == game.UserNumber {
+				fmt.Printf("You won in %d attempts!\n", game.Attempts)
+			} else {
+				fmt.Printf("Exiting game. You made %d attempts.\n", game.Attempts)
+			}
 			return
 		}
 		switch menuOp {
 		case 1:
 			matchResult, err := IsMatch(&game)
 			if err != nil {
-
+				fmt.Printf("Error: %v\n", err)
+				continue
 			}
 			if matchResult == Match {
-				println("Finish game")
+				fmt.Printf("You won in %d attempts!\n", game.Attempts)
 				return
 			}
+			fmt.Printf("Hint: %s\n", matchResult)
 		case 2:
+			if game.PistasRestantes <= 0 {
+				fmt.Println("Error: No hints remaining")
+				continue
+			}
 			match, err := GeneratePista(&game)
 			if err != nil {
-
+				fmt.Printf("Error: %v\n", err)
+				continue
 			}
-
-			fmt.Printf("Pista :%s \n", match)
+			fmt.Printf("Hint: %s\n", match)
 		default:
-			println("Error")
+			fmt.Println("Error: Invalid option")
 		}
 	}
 }
