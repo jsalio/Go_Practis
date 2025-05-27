@@ -92,10 +92,15 @@ func ReadCsvFile(filename string) ([]CsvData, error) {
 	}
 
 	var data []CsvData
-	for _, record := range records {
+	for index, record := range records {
 		if len(record) < 3 {
 			continue
 		}
+
+		if index == 0 {
+			continue
+		}
+
 		csvData, err := ParceLine(record)
 		if err != nil {
 			continue
